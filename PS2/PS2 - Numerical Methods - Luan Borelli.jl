@@ -94,6 +94,12 @@ V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # The guess, constructed from c.
 ## 1 ##
 #######
 
+## Below I present several different methods for solving the model.
+## All you need to do in order to obtain the results reported in the 
+## LaTeX document is to uncomment (removing the '#=' and '=#') one 
+## of the blocks below and then run the entire code.
+
+
 ##############################################################
 # Solution #1: brute-force grid search without parallelizing #
 ##############################################################
@@ -167,7 +173,6 @@ end
                         V[i, j] = v_max
                         policy[i, j] = k_grid[n]
                     end 
-                    print(threadid(), "\n")
                 end
             end
         end # End of the iterative process. 
@@ -220,6 +225,7 @@ end
 ## Solution #4: vectorized,  parallelizing ##
 #############################################
 
+#= 
 c_matrix = [z_grid[i]*(k_grid[j]^α).-k_grid[k].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid), k in 1:length(k_grid)]
 u_matrix = u.(c_matrix) # Matriz 3D de utilidades 
 
@@ -232,10 +238,11 @@ u_matrix = u.(c_matrix) # Matriz 3D de utilidades
         EV = [Π[j,:]' * V_prev[n,:] for n in 1:length(k_grid), j in 1:length(z_grid)] # Matriz de valores esperados, para cada combinação possível de k' e z.
 
         @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo.
+            @threads for i in 1:length(k_grid) 
                 value = u_matrix[i,j,:] + β * EV[:,j]
                 V[i,j] = maximum(value); # Maximiza a função valor usando V_prev.
                 policy_index[i,j] = argmax(value) # Para calcular as Euler Equation Errors futuramente. 
-                policy[i,j] = k_grid[policy_index[i,j]]
+                policy[i,j] = k_grid[policy_index[i,j]] # Capital policy function.
             end
         end 
 
@@ -246,9 +253,121 @@ u_matrix = u.(c_matrix) # Matriz 3D de utilidades
     print("Total iterations: ", iter, "\n")
 end
 
+=# 
+
+#############################
+## EXPLOITING MONOTONICITY ##
+#############################
+
+@time begin
+
+    pos = 1
+    iter = 0
 
 
+    while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+    # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+    # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+
+        V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração. 
+        # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+
+        @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+            pos = 1
+            @threads for i in 1:length(k_grid) 
+                @threads for n in pos:length(k_grid)
+                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
+                    if v_max > V[i, j]
+                        V[i, j] = v_max
+                        pos = n
+                        policy[i, j] = k_grid[pos]
+                    end 
+                end
+            end
+        end 
+
+        iter += 1; # Soma um ao contador de iterações
+        #print("\n", "Iter: ", iter)
+        #print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+    end
+    print("Total iterations: ", iter, "\n")
+end
+
+##########################
+## EXPLOITING CONCAVITY ##
+##########################
+
+#= 
+
+@time begin
+    pos = 1
+    iter = 0
+    while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+    # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+    # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+        V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração. 
+        # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+        @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+            pos = 1
+            @threads for i in 1:length(k_grid)
+
+                    k = 1 
+                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                    next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:] 
+
+                    while next_v_max > v_max && k < length(k_grid) - 1  
+                        v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                        next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:]
+                        k += 1
+                    end  
+
+                    V[i, j] = v_max
+                    policy_index[i,j] = k
+                    policy[i,j] = k_grid[k]
+            end
+        end 
+        iter += 1; # Soma um ao contador de iterações
+        print("\n", "Iter: ", iter)
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+    end
+    print("Total iterations: ", iter, "\n")
+end
+
+=# 
+
+###########
+## Plots ##
+###########
+
+# Recovering consumption policy function: 
+policy_c = [z_grid[i]*(k_grid[j]^α).-policy[j,i].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] 
+
+# Plotting value function: 
+plot(k_grid, V) # 2D plot.
+plot(repeat(k_grid,1,7), repeat(z_grid',500), V, seriestype=:surface, camera=(20,40)) # 3D plot.
+
+# Plotting capital policy function: 
+plot(k_grid, policy) # 2D plot.
+plot(repeat(k_grid,1,7), repeat(z_grid',500), policy, seriestype=:surface, camera=(20,40)) # 3D plot.
+
+# Plotting consumption policy function: 
+plot(k_grid, policy_c) # 2D plot.
+plot(repeat(k_grid,1,7), repeat(z_grid',500), policy_c, seriestype=:surface, camera=(20,40)) # 3D plot. 
+
+###########################
+## Euler Equation Errors ##
+###########################
+
+# This function calculates the Euler Error for a given k (index) and a given z (index): 
+EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (policy_c[policy_index[k_ind,z_ind],:].^(-μ) .* (α*z_grid*policy[k_ind,z_ind]^(α-1) .+ 1 .- δ))))^(-1/μ))/(policy_c[k_ind, z_ind])))
+
+# Generating a matrix of EEEs for every possible combination of k's and z's:
+EEEs = [EEE(i,j) for i in 1:length(k_grid), j in 1:length(z_grid)]
+
+# Plotting Euler Equation Errors: 
+plot(k_grid, EEEs)
 
 #= To-do: 
 [ ] Traduzir comentários;  
-[ ] Incluir plots e Euler Errors.  
+[ ] Formatar plots. 
+=#
