@@ -7,7 +7,7 @@
 ## Importing useful packages ##
 ###############################
 
-using Distributions, Random, Plots, Base.Threads 
+using Distributions, Random, Plots, Base.Threads, Interpolations
 
 #################################
 ## Defining Tauchen's function ##
@@ -63,7 +63,7 @@ tol = 10^(-5); # Tolerance for the distance between elements of the value functi
 # are "close enough". Remember that the sequence of V's is a Cauchy sequence.
 
 iter = 0; # We will use this variable to count the number of iterations.
-maxiter = 1000; # Maximum number of iterations. We will use this to avoid the possibility of an infinite loop.
+maxiter = 100000; # Maximum number of iterations. We will use this to avoid the possibility of an infinite loop.
 
 # Defining the utility function: 
 
@@ -84,6 +84,7 @@ z_grid = exp.(tauch[1]) # Grid for shocks. Note that since the process is log'd,
 V_prev = ones(length(k_grid), length(z_grid)); # Temporary vector for the value function iteration.
 policy = zeros(length(k_grid), length(z_grid)); # Vector that will store the policy function.
 policy_index = Int.(zeros(length(k_grid), length(z_grid))); # Vector that will store the indexes of the policy function.
+values = zeros(length(k_grid), length(z_grid)); # Vector that will store the Bellman equation values during the brute-force grid-search. 
 
 # V = zeros(length(k_grid), length(z_grid)); # Initial guess for the value function. 
 # Usually zero. But there are better guesses. For example, Moll's initial guess: 
@@ -91,7 +92,7 @@ c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_g
 V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # The guess, constructed from c.
 
 #######
-## 1 ##
+## 3 ##
 #######
 
 ## Below I present several different methods for solving the model.
@@ -255,9 +256,11 @@ end
 
 =# 
 
-#############################
-## EXPLOITING MONOTONICITY ##
-#############################
+##################################################
+## Solution #5: Exploiting monotonicity (alone) ##
+##################################################
+
+#= 
 
 @time begin
 
@@ -273,32 +276,32 @@ end
         # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
 
         @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
-            pos = 1
-            @threads for i in 1:length(k_grid) 
-                @threads for n in pos:length(k_grid)
-                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
-                    if v_max > V[i, j]
-                        V[i, j] = v_max
-                        pos = n
-                        policy[i, j] = k_grid[pos]
-                    end 
+            starting_pos = 1
+            for i in 1:length(k_grid) 
+                @threads for n in starting_pos:length(k_grid)
+                    values[n,j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
                 end
+                V[i, j] = maximum(values[:, j])
+                policy_index[i, j] = argmax(values[:, j])
+                starting_pos = argmax(values[:, j])
+                policy[i,j] = k_grid[starting_pos]
             end
         end 
 
         iter += 1; # Soma um ao contador de iterações
-        #print("\n", "Iter: ", iter)
-        #print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+        print("\n", "Iter: ", iter)
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
     end
     print("Total iterations: ", iter, "\n")
 end
 
-##########################
-## EXPLOITING CONCAVITY ##
-##########################
+=# 
+
+###############################################
+## Solution #6: Exploiting concavity (alone) ##
+###############################################
 
 #= 
-
 @time begin
     pos = 1
     iter = 0
@@ -332,8 +335,215 @@ end
     end
     print("Total iterations: ", iter, "\n")
 end
+=#
+
+####################################################################
+# Solution #7: Exploiting both concavity and monotonicity together #
+####################################################################
+
+# Notice that in order to exploit monotonicity together with concavity we only need to change one line of 
+# code in the concavity algorithm. Indeed, this one line is the line that redefines k to 1. 
+# Now we redefine it to 1 only at the z_grid loop, so that "k" counting is being accumulated during the k_grid for-loop. 
+# This makes sense: in this way, for each k in 1:length(k_grid) the algorithm will start to search for the optimal k' 
+# beginning at the position of the optimal k' associated with the previous capital. This is exactly the idea of 
+# exploiting monotonicity! 
+
+#= 
+@time begin
+
+    pos = 1
+    iter = 0
+
+    while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+    # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+    # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+
+        V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração. 
+        # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+
+        @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+            k = 1
+            for i in 1:length(k_grid) 
+                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                    next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:] 
+                    while next_v_max > v_max && k < length(k_grid) - 1
+                        k += 1  
+                        v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                        next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:]
+                    end  
+                    V[i, j] = v_max
+                    policy_index[i,j] = k
+                    policy[i,j] = k_grid[k]
+            end
+        end 
+
+        iter += 1; # Soma um ao contador de iterações
+        # print("\n", "Iter: ", iter)
+        # print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+    end
+    print("Total iterations: ", iter, "\n")
+end
+=# 
+
+#######
+## 4 ##
+#######
+
+n_h = 10 # Number of iterations using the existing policy function we will perform after each policy function update.
+
+#################
+## Accelerator ##
+#################
+
+#= 
+
+@time begin # Computaremos o tempo de execução do processo de iteração.
+    
+    while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+    # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+    # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+            
+        V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração.
+        # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+        @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+            for i in 1:length(k_grid) 
+                @threads for n in 1:length(k_grid)
+                    values[n,j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
+                end
+                V[i, j] = maximum(values[:, j])
+                pos = argmax(values[:, j])
+                policy_index[i, j] = pos 
+                policy[i,j] = k_grid[pos]
+            end
+        end 
+
+       for h in 1:n_h
+            V_prev = copy(V)
+            @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+                @threads for i in 1:length(k_grid)
+                    V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy[i,j]) + β * Π[j,:]' * V_prev[trunc(Int, policy_index[i,j]),:] 
+                end
+            end
+        end
+        iter += 1 + n_h;
+        print("\n", "Iter: ", iter)
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)))
+    end
+end
 
 =# 
+
+##########################################
+# Accelerator + Monotonicity + Concavity # 
+##########################################
+
+#= 
+@time begin
+    pos = 1
+    iter = 0
+    while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+    # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+    # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+
+        V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração. 
+        # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+
+        @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+            k = 1
+            for i in 1:length(k_grid) 
+                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                    next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:] 
+                    while next_v_max > v_max && k < length(k_grid) - 1
+                        k += 1  
+                        v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
+                        next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:]
+                    end  
+                    V[i, j] = v_max
+                    policy[i,j] = k_grid[k]
+                    policy_index[i,j] = k
+            end
+        end 
+
+        @threads for h in 1:n_h
+            V_prev = copy(V)
+            @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+                @threads for i in 1:length(k_grid)
+                    V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy[i,j]) + β * Π[j,:]' * V_prev[trunc(Int, policy_index[i,j]),:] 
+                end
+            end
+        end
+        iter += 1; # Soma um ao contador de iterações
+        print("\n", "Iter: ", iter)
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+    end
+    print("Total iterations: ", iter, "\n")
+end
+
+=# 
+
+#######
+## 5 ##
+#######
+
+##########################################
+## Multigrid + Concavity + Monotonicity ##
+##########################################
+
+#############################################
+## Multigrid, with vectorized maximization ##
+#############################################
+
+grid_sizes = [100, 500, 5000] # A vector containing the grid sizes that will be considered in the multigrid method. 
+k_grids = [range(0.75*k_ss, 1.25*k_ss, length = s) for s in grid_sizes] # Generating the vector of grids that will be considered in the multigrid method.
+k_grid = k_grids[1]; # Initial grid for k. 
+
+V_prev = ones(length(k_grid), length(z_grid)); # Vetor temporário para a iteração da função valor.
+policy = zeros(length(k_grid), length(z_grid)); # Vetor que armazenará a policy function.
+
+c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
+V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess. 
+
+@time begin # Computaremos o tempo de execução do processo de iteração.
+    for g in 1:length(k_grids)
+        # Matriz 3D de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k, z e k'.
+        c_matrix = [z_grid[i]*(k_grids[g][j]^α).-k_grids[g][k].+(1-δ)*k_grids[g][j] for j in 1:length(k_grids[g]), i in 1:length(z_grid), k in 1:length(k_grids[g])]
+        u_matrix = u.(c_matrix) # Matriz 3D de utilidades 
+        
+        if g > 1 
+            V = mapreduce(permutedims, vcat, [linear_interpolation(k_grids[g-1],V[:,i])(range(0.75*k_ss, 1.25*k_ss, length=length(k_grids[g]))) for i in 1:length(z_grid)])'
+            V_prev = ones(length(k_grids[g]), length(z_grid));
+            policy = zeros(length(k_grids[g]), length(z_grid)); # Vetor que armazenará a policy function 
+            policy_index = zeros(length(k_grids[g]), length(z_grid)); # Vetor que armazenará a policy function 
+        end
+        # print("Initial distance: ", maximum(abs.(V_prev - V)), " | Grid: ", g, "\n")
+        while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+        # O código será interrompido quando a distância for menor que a tolerância definida anteriormente. 
+        # Adicionalmente, impomos um limite de iterações para evitar a possibilidade de loops infinitos.
+                
+            V_prev = copy(V); # Define a função valor como a função valor obtida na última iteração.
+            # Note que na primeira iteração V_prev será, portanto, a initial guess para V. 
+            EV = [Π[j,:]' * V_prev[n,:] for n in 1:length(k_grids[g]), j in 1:length(z_grid)] # Matriz de valores esperados, para cada combinação possível de k' e z.
+            @threads for j in 1:length(z_grid) # Iniciamos o processo iterativo. Enumerate pega o índice e o valor do vetor, respectivamente.
+                @threads for i in 1:length(k_grids[g]) 
+                    value = u_matrix[i,j,:] + β * EV[:,j]
+                    V[i,j] = maximum(value); # Maximiza a função valor usando V_prev.
+                    policy_index[i,j] = argmax(value)
+                    policy[i,j] = k_grids[g][argmax(value)]
+                end
+            end 
+            if iter == 0 
+                print("Initial distance: ", maximum(abs.(V_prev - V)), " | Grid: ", g, "\n")
+            end 
+            iter += 1; # Soma um ao contador de iterações
+            print("\n", "Iter: ", iter, " | Grid: ", g)
+            print("\n", "Distance: ", maximum(abs.(V_prev - V)))
+        end
+    end 
+    print("Total iterations: ", iter, "\n")
+end
+k_grid = k_grids[length(k_grids)]
+
+
 
 ###########
 ## Plots ##
