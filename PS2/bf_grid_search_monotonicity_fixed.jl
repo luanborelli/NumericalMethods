@@ -69,13 +69,14 @@ z_grid = exp.(tauch[1])
 
 V_prev = ones(length(k_grid), length(z_grid)); # Vetor temporário para a iteração da função valor 
 policy = zeros(length(k_grid), length(z_grid)); # Vetor que armazenará a policy function 
+v_maxs = zeros(length(k_grid), length(z_grid));
 
-V = zeros(length(k_grid), length(z_grid)); # Initial guess para a função valor. 
+# V = zeros(length(k_grid), length(z_grid)); # Initial guess para a função valor. 
 # Geralmente, zero. Mas existem chutes melhores. Por exemplo:
 # V = repeat(ones(size(k_grid)).*u(k_ss)/(1-β), 1, length(z_grid))  # Judd's suggested initial guess.
 # V = repeat(u.(k_grid.^α.-k_grid.+(1-δ)*k_grid)./(1-β), 1, length(z_grid)) # Moll's initial guess.
-# c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
-# V = ((c.^(1-μ).-1)./(1-μ))./(1-β)
+c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
+V = ((c.^(1-μ).-1)./(1-μ))./(1-β)
 
 @time begin
 
@@ -94,13 +95,11 @@ V = zeros(length(k_grid), length(z_grid)); # Initial guess para a função valor
             pos = 1
             @threads for i in 1:length(k_grid) 
                 @threads for n in pos:length(k_grid)
-                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
-                    if v_max > V[i, j]
-                        V[i, j] = v_max
-                        pos = n
-                        policy[i, j] = k_grid[pos]
-                    end 
+                    v_maxs[n,j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[n]) + β * Π[j,:]' * V_prev[n,:] 
                 end
+                V[i,j] = maximum(v_maxs[:,j])
+                pos = argmax(v_maxs[:,j])
+                policy[i, j] = k_grid[pos]
             end
         end 
 
@@ -116,13 +115,7 @@ policy_c = [z_grid[i]*(k_grid[j]^α).-policy[j,i].+(1-δ)*k_grid[j] for j in 1:l
 
 
 # Plotting value functions for each state:
-plot(k_grid, V[:,1])
-plot!(k_grid, V[:,2])
-plot!(k_grid, V[:,3])
-plot!(k_grid, V[:,4])
-plot!(k_grid, V[:,5])
-plot!(k_grid, V[:,6])
-plot!(k_grid, V[:,7])
+plot(k_grid, V)
 
 # Value function 3-D plot: 
 plot(repeat(k_grid,1,7), repeat(z_grid',500), V, seriestype=:surface, camera=(10,50))
@@ -130,26 +123,13 @@ plot(repeat(k_grid,1,7), repeat(z_grid',500), V, seriestype=:surface, camera=(10
 
 # Plotting policy function (k') for each state:
 
-plot(k_grid, policy[:,1])
-plot!(k_grid, policy[:,2])
-plot!(k_grid, policy[:,3])
-plot!(k_grid, policy[:,4])
-plot!(k_grid, policy[:,5])
-plot!(k_grid, policy[:,6])
-plot!(k_grid, policy[:,7])
+plot(k_grid, policy)
 
 # k' policy function 3-D plot: 
 plot(repeat(k_grid,1,7), repeat(z_grid',500), policy, seriestype=:surface, camera=(10,50))
 
 # Plotting policy
-plot(k_grid, policy_c[:,1])
-plot!(k_grid, policy_c[:,2])
-plot!(k_grid, policy_c[:,3])
-plot!(k_grid, policy_c[:,4])
-plot!(k_grid, policy_c[:,5])
-plot!(k_grid, policy_c[:,6])
-plot!(k_grid, policy_c[:,7])
-
+plot(k_grid, policy_c)
 
 # c policy function 3-D plot: 
 plot(repeat(k_grid,1,7), repeat(z_grid',500), policy_c, seriestype=:surface, camera=(10,50))
