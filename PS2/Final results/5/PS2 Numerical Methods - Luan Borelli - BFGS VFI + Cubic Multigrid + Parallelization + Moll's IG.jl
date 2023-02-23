@@ -1,8 +1,8 @@
-################################################################################################
-## Problem Set 2 - Numerical Methods                                                          ##
-## VFI BFGS + Multigrid + Monotonicity + Concavity + Parallelization + Moll's initial guess   ##
-## Student: Luan Borelli                                                                      ##
-################################################################################################
+#####################################################################
+## Problem Set 2 - Numerical Methods                               ##
+## BFGS VFI + Multigrid + Parallelization + Moll's initial guess   ##
+## Student: Luan Borelli                                           ##
+#####################################################################
 
 ###############################
 ## Importing useful packages ##
@@ -77,14 +77,13 @@ function u(c)
     return u
 end
 
-k_grid = range(0.75*k_ss, 1.25*k_ss, length = 500); # A grid for capital values. Required to discretize the domain.
 tauch = tauchen(0,0.007^2,0.95,7,3) # Tauchen discretization of the AR(1) process.
 z_grid = exp.(tauch[1]) # Grid for shocks. Note that since the process is log'd, we need to exponentiate the grid returned by the tauch(.) function.
 Π = tauch[2] # Transition probabilities matrix for shocks.
 
-################################################################################################
-## VFI BFGS + Multigrid + Monotonicity + Concavity + Parallelization + Moll's initial guess   ##
-################################################################################################
+###################################################################
+## BFGS VFI + Multigrid + Parallelization + Moll's initial guess ##
+###################################################################
 
 grid_sizes = [100, 500, 5000] # A vector containing the grid sizes that will be considered in the multigrid method. 
 k_grids = [range(0.75*k_ss, 1.25*k_ss, length = s) for s in grid_sizes] # Generating the vector of grids that will be considered in the multigrid method.
@@ -93,51 +92,46 @@ k_grid = k_grids[1]; # Initial grid for k.
 V_prev = ones(length(k_grid), length(z_grid)); # Temporary vector for the value functio iteration.
 policy = zeros(length(k_grid), length(z_grid)); # Vector that will store the capital policy function. 
 policy_index = Int.(zeros(length(k_grid), length(z_grid))); # Vector that will store the indexes of the policy function.
+values = zeros(length(k_grid), length(z_grid)); # Vector that will store the Bellman equation values during the brute-force grid-search. 
 
-c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
-V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess. 
+# V = zeros(length(k_grid), length(z_grid)); # Initial guess for the value function. 
+# Usually zero. But there are better guesses. For example, Moll's initial guess: 
+c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # A king of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z. 
+V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
 
-
-@time begin
-
-    pos = 1
-    iter = 0
-
+@time begin 
     for g in 1:length(k_grids)
-    
+        
         if g > 1 
-            V = mapreduce(permutedims, vcat, [linear_interpolation(k_grids[g-1],V[:,i])(range(0.75*k_ss, 1.25*k_ss, length=length(k_grids[g]))) for i in 1:length(z_grid)])'
+            V = mapreduce(permutedims, vcat, [cubic_spline_interpolation(k_grids[g-1],V[:,i])(range(0.75*k_ss, 1.25*k_ss, length=length(k_grids[g]))) for i in 1:length(z_grid)])'
             V_prev = ones(length(k_grids[g]), length(z_grid));
             policy = zeros(length(k_grids[g]), length(z_grid)); # Vector that will store the capital policy function.
-            policy_index = Int.(zeros(length(k_grids[g]), length(z_grid))); # Vector that will store the indexes of the capital policy function.  
+            policy_index = Int.(zeros(length(k_grids[g]), length(z_grid))); # Vector that will store the indexes of the capital policy function. 
+            values = zeros(length(k_grids[g]), length(z_grid)); # Vector that will store the Bellman equation values during the brute-force grid-search. 
         end
 
         while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Note that we measure the distance using the sup norm.
             # The code will stop when the distance is less than the defined tolerance, tol.
             # Additionally, we enforce an iteration limit to avoid the possibility of infinite loops.
-
-            V_prev = copy(V); # Sets the value function to be the value function obtained in the last iteration.
-            # Note that in the first iteration V_prev will therefore be the initial guess for V. 
-
-            @threads for j in 1:length(z_grid) # The iterative process is initiated.
-                k = 1
-                for i in 1:length(k_grids[g]) 
-                        v_max = u(z_grid[j]*k_grids[g][i]^α + (1-δ)*k_grids[g][i] - k_grids[g][k]) + β * Π[j,:]' * V_prev[k,:]
-                        next_v_max = u(z_grid[j]*k_grids[g][i]^α + (1-δ)*k_grids[g][i] - k_grids[g][k+1]) + β * Π[j,:]' * V_prev[k+1,:] 
-                        while next_v_max > v_max && k < length(k_grids[g]) - 1
-                            k += 1  
-                            v_max = u(z_grid[j]*k_grids[g][i]^α + (1-δ)*k_grids[g][i] - k_grids[g][k]) + β * Π[j,:]' * V_prev[k,:]
-                            next_v_max = u(z_grid[j]*k_grids[g][i]^α + (1-δ)*k_grids[g][i] - k_grids[g][k+1]) + β * Π[j,:]' * V_prev[k+1,:]
-                        end  
-                        V[i, j] = v_max
-                        policy_index[i,j] = k
-                        policy[i,j] = k_grids[g][k]
-                end
-            end # End of the iterative process. 
-
-            iter += 1;
-            print("\n", "Iter: ", iter, " | Grid: ", g)
-            print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+                    
+                V_prev = copy(V); # Sets the value function to be the value function obtained in the last iteration.
+                # Note that in the first iteration V_prev will therefore be the initial guess for V.
+        
+                @threads for j in 1:length(z_grid) # The iterative process is initiated.
+                    for i in 1:length(k_grids[g]) 
+                        @threads for n in 1:length(k_grids[g])
+                            values[n,j] = u(z_grid[j]*k_grids[g][i]^α + (1-δ)*k_grids[g][i] - k_grids[g][n]) + β * Π[j,:]' * V_prev[n,:] 
+                        end
+                        V[i, j] = maximum(values[:, j])
+                        policy_index[i, j] = argmax(values[:, j])
+                        pos = argmax(values[:, j])
+                        policy[i,j] = k_grids[g][pos]
+                    end
+                end # End of the iterative process. 
+        
+            iter += 1; # Adds one to the iteration counter.
+            print("\n", "Iter: ", iter, " | Grid: ", g) # Prints the current iteration. 
+            print("\n", "Distance: ", maximum(abs.(V_prev - V))) # Prints the distance between the current and the previous value function.
         end
     end 
     print("Total iterations: ", iter, "\n")
