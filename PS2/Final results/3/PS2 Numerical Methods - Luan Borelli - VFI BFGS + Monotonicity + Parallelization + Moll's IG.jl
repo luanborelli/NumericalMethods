@@ -98,9 +98,7 @@ V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
 
 @time begin
 
-    pos = 1
     iter = 0
-
 
     while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Note that we measure the distance using the sup norm.
     # The code will stop when the distance is less than the defined tolerance, tol.
@@ -123,8 +121,8 @@ V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
         end # End of the iterative process. 
 
         iter += 1; # Adds one to the iteration counter.
-        # print("\n", "Iter: ", iter) # Prints the current iteration.
-        # print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n") # Prints the distance between the current and the previous value function.
+        print("\n", "Iter: ", iter) # Prints the current iteration.
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n") # Prints the distance between the current and the previous value function.
     end
     print("Total iterations: ", iter, "\n")
 end

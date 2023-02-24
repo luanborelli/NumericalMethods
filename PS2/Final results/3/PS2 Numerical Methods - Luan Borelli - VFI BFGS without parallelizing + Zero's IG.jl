@@ -120,8 +120,8 @@ V = zeros(length(k_grid), length(z_grid)); # Initial guess for the value functio
         end 
 
         iter += 1; # Adds one to the iteration counter.
-        # print("\n", "Iter: ", iter) # Prints the current iteration.
-        # print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n") # Prints the current distance.
+        print("\n", "Iter: ", iter) # Prints the current iteration.
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n") # Prints the current distance.
     end
 end
 
