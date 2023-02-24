@@ -100,7 +100,6 @@ V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess.
 
 @time begin
 
-    pos = 1
     iter = 0
 
     for g in 1:length(k_grids)
