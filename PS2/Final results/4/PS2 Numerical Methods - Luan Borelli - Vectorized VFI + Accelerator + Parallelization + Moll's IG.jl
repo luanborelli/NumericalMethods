@@ -1,8 +1,8 @@
-###############################################################################################
-## Problem Set 2 - Numerical Methods                                                         ##
-## VFI BFGS + Accelerator + Concavity + Monotonicy + Parallelization + Moll's initial guess  ##
-## Student: Luan Borelli                                                                     ##
-###############################################################################################
+############################################################################
+## Problem Set 2 - Numerical Methods                                      ##
+## Vectorized VFI + Accelerator + Parallelization + Moll's initial guess  ##
+## Student: Luan Borelli                                                  ##
+############################################################################
 
 ###############################
 ## Importing useful packages ##
@@ -92,55 +92,51 @@ values = zeros(length(k_grid), length(z_grid)); # Vector that will store the Bel
 c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # A king of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z. 
 V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
 
-#############################################################################################
-# VFI BFGS + Accelerator + Concavity + Monotonicy + Parallelization + Moll's initial guess ##
-#############################################################################################
+##########################################################################
+# Vectorized VFI + Accelerator + Parallelization + Moll's initial guess ##
+##########################################################################
 
 n_h = 10 # Number of "additional iterations", without maximization, that will be performed using the approximated
 # policy function, after each brute force maximization. I set n_h = 10, as suggested by the exercise. 
 # Setting n_h = 10 can be understood as "only performing the maximization part for 10% of the iterations".
 
+c_matrix = [z_grid[i]*(k_grid[j]^α).-k_grid[k].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid), k in 1:length(k_grid)] # A three-dimensional array of consumptions, containing all possible consumption values, for all possible combinations of k, z and k'.
+u_matrix = u.(c_matrix) # A three-dimensional array of utility values. All possible values for the utility function, for all possible combinations of k, z and k'. 
+
 @time begin
-    iter = 0
+    
     while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Note that we measure the distance using the sup norm.
-        # The code will stop when the distance is less than the defined tolerance, tol.
-        # Additionally, we enforce an iteration limit to avoid the possibility of infinite loops.
+    # The code will stop when the distance is less than the defined tolerance, tol.
+    # Additionally, we enforce an iteration limit to avoid the possibility of infinite loops.
+            
+        V_prev = copy(V); 
+        EV = [Π[j,:]' * V_prev[n,:] for n in 1:length(k_grid), j in 1:length(z_grid)] # A matrix of expected values for each possible combination of k' and z.
 
-        V_prev = copy(V); # Sets the value function to be the value function obtained in the last iteration.
-        # Note that in the first iteration V_prev will therefore be the initial guess for V. 
-
-        @threads for j in 1:length(z_grid) # The iterative process is initiated.
-            k = 1
-            for i in 1:length(k_grid) 
-                    v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
-                    next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:] 
-                    while next_v_max > v_max && k < length(k_grid) - 1
-                        k += 1  
-                        v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k]) + β * Π[j,:]' * V_prev[k,:]
-                        next_v_max = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - k_grid[k+1]) + β * Π[j,:]' * V_prev[k+1,:]
-                    end  
-                    V[i, j] = v_max
-                    policy[i,j] = k_grid[k]
-                    policy_index[i,j] = k
+        # We start the iterative process.
+        @threads for j in 1:length(z_grid) # Given z...
+            @threads for i in 1:length(k_grid) # Given k...
+                value = u_matrix[i,j,:] + β * EV[:,j] # All possible values for the Bellman equation, given k and z.
+                V[i,j] = maximum(value); # Takes the maximum value. 
+                policy_index[i,j] = argmax(value) # Capital policy function indexes. Will be necessary for calculating Euler Equation Errors in the future. 
+                policy[i,j] = k_grid[policy_index[i,j]] # Capital policy function.
             end
-        end # End of the iterative process. 
+        end 
 
-        iter += 1; 
+        iter += 1; # Adds one to the iteration counter.
         print("\n", "Iter: ", iter)
-        print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+        print("\n", "Distance: ", maximum(abs.(V_prev - V)))
 
-        for h in 1:n_h # Acceleration starts here. We perform n_h additional iterations *without maximization*, using the previously approximated policy function.
+       for h in 1:n_h # Acceleration starts here. We perform n_h additional iterations *without maximization*, using the previously approximated policy function.
             V_prev = copy(V)
             @threads for j in 1:length(z_grid) 
                 @threads for i in 1:length(k_grid)
                     V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy[i,j]) + β * Π[j,:]' * V_prev[trunc(Int, policy_index[i,j]),:] 
                 end
             end
-            iter += 1; 
+            iter += 1
             print("\n", "Iter: ", iter)
-            print("\n", "Distance: ", maximum(abs.(V_prev - V)), "\n")
+            print("\n", "Distance: ", maximum(abs.(V_prev - V)))
         end
-
     end
     print("Total iterations: ", iter, "\n")
 end
