@@ -87,19 +87,23 @@ chebyshev_roots(degree) = [chebyshev_root(i, degree) for i in 1:degree]; # This 
 function c_hat(k, z_ind, γ) # "Approximate" policy function.
     fval = 0; 
     size_γ = size(γ)[1]
-    for i in 0:(size_γ - 1) # Note que length(γ) = Ordem do polinomio + 1. Ou seja, length(γ) - 1 é a ordem do polinômio.
+    for i in 0:(size_γ - 1) # Notice that length(γ) = polynomial order + 1. I.e., length(γ) - 1 is the polynomial order.
         fval = fval + γ[i+1, z_ind]*chebyshev_polynomial(normalized_k(k), i)
     end 
     return fval 
 end
 
+# Defining the residual function, R(k, z, γ):
+
 function R(k, z_ind, γ) # Residual function. 
-    kp = z_grid[z_ind] * k^α + (1-δ)*k - c_hat(k, z_ind, γ)
+    kp = z_grid[z_ind] * k^α + (1-δ)*k - c_hat(k, z_ind, γ) # k'
     cps = [c_hat(kp, z, γ) for z in 1:length(z_grid)] # c(k', z')'s
     error = c_hat(k, z_ind, γ).^(-μ) - β * Π[z_ind,:]' * (cps .^(-μ) .* ( α*z_grid*kp.^(α - 1) .+ 1 .- δ))
     # error = c_hat(k,γ) - (β * Π[z_ind,:]' * (c_hat(kp, γ)^(-μ) * ( α*z_grid*kp^(α - 1) .+ 1 .- δ) ))^(-1/μ)
     return error
 end
+
+# Defining the system: 
 
 function system(γ) # This function constructs the system to be solved. 
     size_γ = size(γ)[1]
@@ -139,7 +143,7 @@ policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate t
 
 # Note that, to fully characterize the economy, in practice we solve "7 models", one for each possible value of z (that is, one for each state of nature).
 
-@time begin
+@time begin # Solving the system.
     for i in 1:length(z_grid)
         guess = ones(2, length(z_grid)) 
         for n in 1:deg 
@@ -179,7 +183,7 @@ c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_g
 V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
 
 # "Estimating" the positions of k'(k, z) (capital  policy function) on the exogenous grid: 
-pol_index = [findfirst(isequal(minimum(abs.(k_grid .- policy_k[i,j]))), abs.(k_grid .- policy_k[i,j])) for i in 1:length(k_grid), j in 1:length(z_grid)]
+pol_index = [argmin(abs.(k_grid .- policy_k[i,j])) for i in 1:length(k_grid), j in 1:length(z_grid)]
 
 # Obtaining the capital policy function on the exogenous grid: 
 policy_exo = [k_grid[pol_index[i, j]] for i in eachindex(k_grid), j in eachindex(z_grid)]
