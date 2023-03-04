@@ -1,28 +1,22 @@
-using Plots
-using NLsolve
-using Distributions, Random
-using Base.Threads
+###########################################
+## Problem Set 3 - Numerical Methods     ##
+## Finite Elements Method + Collocation  ##
+## Student: Luan Borelli                 ##
+###########################################
+
+###############################
+## Importing useful packages ##
+###############################
+
+using Plots, NLsolve, Distributions, Random, Base.Threads
 
 ##################################
 ## RBC by Chebyshev Collocation ##
 ##################################
 
-# Defining model parameters: 
-
-β = 0.987
-μ = 2
-α = 1/3 
-δ = 0.012 
-ρ = 0.95
-σ = 0.007
-
-k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1))
-
-a = 0.75*k_ss
-b = 1.25*k_ss
-k_grid = range(a, b, length = 15);
-
-# Discretizing: 
+#################################
+## Defining Tauchen's function ##
+#################################
 
 function tauchen(μ,σsq,ρ,N,m)
   
@@ -54,10 +48,31 @@ function tauchen(μ,σsq,ρ,N,m)
     return θ, P    
   end
 
+###############################
+## Defining model parameters ##
+###############################
+
+β = 0.987
+μ = 2
+α = 1/3 
+δ = 0.012 
+ρ = 0.95
+σ = 0.007
+
+k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1))
+
+a = 0.75*k_ss
+b = 1.25*k_ss
+k_grid = range(a, b, length = 30); # For finite element methods we don't need a very "fine" grid to represent the capital domain. 
+# A few points are enough for a good approximation. For this reason, I generate a grid of size 15 here.
 
 tauch = tauchen(0,σ^2,ρ,7,3)
 z_grid = exp.(tauch[1]) 
 Π = tauch[2]
+
+##############################################################################
+## Defining specific functions for the Finite Elements Method + Collocation ##
+##############################################################################
 
 # Defining the basis function: 
 
@@ -84,7 +99,9 @@ function basis(k, i)
     return value 
 end
 
-function c_hat(k, z_ind, γ)
+# Defining the "approximate policy function", c_hat: 
+
+function c_hat(k, z_ind, γ) # "Approximate" policy function.
     fval = 0; 
     size_γ = size(γ)[1]
     for i in 1:size_γ
@@ -93,14 +110,18 @@ function c_hat(k, z_ind, γ)
     return fval 
 end
 
-function R(k, z_ind, γ) 
+# Defining the residual function, R(k, z, γ):
+
+function R(k, z_ind, γ) # Residual function.
     kp = - c_hat(k, z_ind, γ) + z_grid[z_ind]*k^α + (1-δ)*k # k'
     cps = [c_hat(kp, z, γ) for z in 1:length(z_grid)] # c(k', z')'s 
     error = c_hat(k, z_ind, γ).^(-μ) - β * Π[z_ind,:]' * (cps .^(-μ) .* ( α*z_grid*kp.^(α - 1) .+ 1 .- δ))
     return error
 end
 
-function system(γ) 
+# Defining the system: 
+
+function system(γ) # This function constructs the system to be solved. 
     err = zeros(length(k_grid), length(z_grid))
     collocation_points = copy(k_grid)
 
@@ -113,21 +134,26 @@ function system(γ)
     return err
 end
 
-params_c = zeros(length(k_grid), length(z_grid))
-policy_c = zeros(length(k_grid), length(z_grid))
-guess = ones(length(k_grid),length(z_grid)) .* range(1, 5, length(k_grid)) # Para convergência é preciso um chute minimamente inteligente. 
+###################################################################
+## Solving the RBC model by Finite Elements Method + Collocation ##
+###################################################################
 
-params_c = nlsolve(system, guess).zero
-# É possível mostrar que os parametros do resultado acima são a própria função
-# consumo no grid. Não obstante: 
+params_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate the final vector for the basis functions' coefficients.  
+policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate the final consumption policy function.  
+guess = ones(length(k_grid),length(z_grid)) .* range(1, 5, length(k_grid)) # Convergence requires a minimally intelligent initial guess. This is why I consider this specific initial guess.
 
+params_c = nlsolve(system, guess).zero # Solving the system.
+
+# It is possible to show that the parameters obtained in the result above are the consumption policy function itself.
+# Nevertheless, just in case, let's recover the consumption policy function as we did before in the other methods: 
 policy_c = [c_hat(k, z, params_c) for k in k_grid, z in 1:length(z_grid)]
 
-plot(k_grid, policy_c)
+# But note that the initial grid we used to solve the model had only 15 points. 
+# What if we want to evaluate the policy function in a "richer" grid? 
+# Well, we can simply generate a new grid of the desired size and recalculate the policy function 
+# using the coefficients obtained by the solution of the original system (which considered only 15 grid points).
 
-# Projetando a função política num grid de tamanho 500
-
-# Criando função para a "policy function estimada", usando parâmetros obtidos: 
+# First, we create a function for the "estimated policy function", using the parameters obtained by the system solution:
 function estimated_c(k, z)
     fval = 0; 
         for i in 1:length(params_c[:, z])
@@ -136,107 +162,120 @@ function estimated_c(k, z)
     return fval 
 end
 
-# Obtendo consumption policy para grid de 500 pontos: 
-new_k_grid = range(0.75*k_ss, 1.25*k_ss, length = 500);
-policy_c_500 = hcat([estimated_c.(new_k_grid, z) for z in 1:length(z_grid)]...)
+# Now we create a richer grid (say with 500 points) and get the consumption policy for that grid by 
+# simply calculating the above function on this grid: 
+new_k_grid = range(0.75*k_ss, 1.25*k_ss, length = 500); # Size-500 grid. 
+policy_c_500 = hcat([estimated_c.(new_k_grid, z) for z in 1:length(z_grid)]...) # Evaluated policy function for 500 grid points. 
 
-plot(new_k_grid, policy_c_500)
-
-#= Teria que adaptar para funcionar...
-### Resolvendo com aprimoramento de chute:
-
-deg = length(k_grid)
-
-@time begin
-    for i in 1:length(z_grid)
-        guess = ones(2, length(z_grid)) 
-        for n in 2:deg
-            results = nlsolve(system, guess).zero
-            if n < deg
-                guess = vcat(results, zeros(length(z_grid))')
-            else 
-                guess = results
-            end 
-            print("\n", guess, "\n")
-        end 
-        params_c = guess
-    end
-end
-=# 
-
-# Recovering capital policy function: 
+# Recovering the capital policy function (for 15 grid points): 
 policy_k = [z_grid[z]*k_grid[k]^α + (1-δ)*k_grid[k] - policy_c[k, z] for k in 1:length(k_grid), z in 1:length(z_grid)]
-plot(k_grid, policy_k)
 
-# Com 500 pontos: 
+# Now, for 500 grid points: 
 policy_k_500 = [z_grid[z]*new_k_grid[k]^α + (1-δ)*new_k_grid[k] - policy_c_500[k, z] for k in 1:length(new_k_grid), z in 1:length(z_grid)]
 plot(new_k_grid, policy_k_500)
 
 
-# Recovering value function:  # Aqui funcionou bem. 
-# Engraçado: só no Chebyshev collocation os resultados ficam estranhos faendo dessa forma. 
+# Recovering the value function (for 500 grid points): 
 
-tol = 10^(-5); # Tolerância para a distância entre elementos da função valor.
-iter = 0; # Utilizarei essa variável para contar o número de iterações. 
-maxiter = 1000; # Limite de iterações. Utilizaremos isso para evitar um possível loop infinito.
-V_prev = ones(length(k_grid), length(z_grid)); # Vetor temporário para a iteração da função valor. 
-# V = zeros(length(k_grid), length(z_grid)) # Initial guess 
-c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
-V = ((c.^(1-μ).-1)./(1-μ))./(1-β)
+tol = 10^(-5); # Tolerance for the distance between elements of the value function.
+# We will use this tolerance to define when to stop the iterative process.
+# tol defines, therefore, the distance from which we consider that the elements of the value function
+# are "close enough". Remember that the sequence of V's is a Cauchy sequence.
 
-# "Estimando" as posições de k'(k, z) no grid de k: 
-pol_index = [findfirst(isequal(minimum(abs.(k_grid .- policy_k[i,j]))), abs.(k_grid .- policy_k[i,j])) for i in 1:length(k_grid), j in 1:length(z_grid)]
+iter = 0; # We will use this variable to count the number of iterations.
+maxiter = 1000; # Maximum number of iterations. We will use this to avoid the possibility of an infinite loop.
+V_prev = ones(length(new_k_grid), length(z_grid)); # Temporary vector for the value function iteration.
+c = [z_grid[i]*(new_k_grid[j]^α).-new_k_grid[j].+(1-δ)*new_k_grid[j] for j in 1:length(new_k_grid), i in 1:length(z_grid)] # A kind of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z. 
+V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Moll's initial guess, constructed from c.
+
+# "Estimating" the positions of k'(k, z) (capital  policy function) on the exogenous grid: 
+pol_index = [argmin(abs.(new_k_grid .- policy_k_500[i,j])) for i in 1:length(new_k_grid), j in 1:length(z_grid)]
+
+# Obtaining the capital policy function on the exogenous grid: 
+policy_exo = [new_k_grid[pol_index[i, j]] for i in eachindex(new_k_grid), j in eachindex(z_grid)]
+
 
 # Defining preferences: 
 function u(c) 
     if c > 0
         u = (c^(1-μ) - 1)/(1-μ); # Utility function
     else 
-        u = -Inf # Necessário para evitar consumo negativo. Se c < 0, utilidade = -infinito.
+        u = -Inf # This is necessary to avoid negative consumption. If c < 0, utility = -∞.
     end
     return u
 end
 
-while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+# Obtaining the value function: 
+
+while maximum(abs.(V_prev - V)) > tol && iter < maxiter
     V_prev = copy(V)
     for j in 1:length(z_grid)
-        for i in 1:length(k_grid)
-            V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy_k[i,j]) + β * Π[j,:]' * V_prev[pol_index[i,j],:] 
+        for i in 1:length(new_k_grid)
+            V[i, j] = u(z_grid[j]*new_k_grid[i]^α + (1-δ)*new_k_grid[i] - policy_exo[i,j]) + β * Π[j,:]' * V_prev[pol_index[i,j],:] 
             # print("\n", V[i, j], "\n")
         end
     end
 
-    iter += 1; # Soma um ao contador de iterações
-    print("\n", "Iter: ", iter)
-    print("\n", "Distance: ", maximum(abs.(V_prev - V)))
+    # iter += 1;
+    # print("\n", "Iter: ", iter)
+    # print("\n", "Distance: ", maximum(abs.(V_prev - V)))
 
 end
 
-V
+#######################
+## Results and plots ##
+#######################
 
-plot(k_grid, V)
+# Plotting the value function: 
+
+plot(new_k_grid, V, 
+    xlab = "k",
+    ylab = "V", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
+
+plot(repeat(new_k_grid,1,7), repeat(z_grid',length(new_k_grid)), V,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "V",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot
+
+# Plotting the capital policy function:
+
+plot(new_k_grid, policy_k_500,
+    xlab = "k",
+    ylab = "k'", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
+
+plot(repeat(new_k_grid,1,7), repeat(z_grid',length(new_k_grid)), policy_k_500,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "k'",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot.
+ 
+# Plotting the consumption policy function: 
+
+plot(new_k_grid, policy_c_500,
+    xlab = "k",
+    ylab = "c", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
+
+plot(repeat(new_k_grid,1,7), repeat(z_grid',length(new_k_grid)), policy_c_500,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "c",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot. 
 
 ##########
-## EEEs ## (!!!!!!!!!!) Não tenho certeza se está certo, mas parece razoável. Diferente de outros resultados que vi,  
-########## mas pode ter a ver com o fato de que usei a quadratura de Gauss-Legendre...
+## EEEs ##   
+##########
 
-cp = [c_hat(policy_k[k,z1], z2, params_c) for k in 1:length(k_grid), z1 in 1:length(z_grid), z2 in 1:length(z_grid)] # Cria um array de C primes, "uma matriz de C primes para cada estado". 
-
-# This function calculates the Euler Error for a given k (index) and a given z (index): 
-EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (cp[k_ind, z_ind, :].^(-μ) .* (α*z_grid*policy_k[k_ind,z_ind]^(α-1) .+ 1 .- δ))))^(-1/μ))/(policy_c[k_ind, z_ind])))
-
-# Generating a matrix of EEEs for every possible combination of k's and z's:
-EEEs = [EEE(i,j) for i in 1:length(k_grid), j in 1:length(z_grid)]
-
-# Plotting Euler Equation Errors: 
-plot(k_grid, EEEs)
-
-# EEE máximo para cada choque: 
-max_EEEs = [maximum(EEEs[:, s]) for s in eachindex(z_grid)]
-
-
-# No grid de 500: (no grid menor fica horrível)
-cp = [c_hat(policy_k_500[k,z1], z2, params_c) for k in 1:length(new_k_grid), z1 in 1:length(z_grid), z2 in 1:length(z_grid)] # Cria um array de C primes, "uma matriz de C primes para cada estado". 
+cp = [c_hat(policy_k_500[k,z1], z2, params_c) for k in 1:length(new_k_grid), z1 in 1:length(z_grid), z2 in 1:length(z_grid)] # Generate an array of C primes; an array of C primes for each state. 
 
 # This function calculates the Euler Error for a given k (index) and a given z (index): 
 EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (cp[k_ind, z_ind, :].^(-μ) .* (α*z_grid*policy_k_500[k_ind,z_ind]^(α-1) .+ 1 .- δ))))^(-1/μ))/(policy_c_500[k_ind, z_ind])))
@@ -245,7 +284,14 @@ EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (cp[k_ind, z_ind, :].^(-μ)
 EEEs = [EEE(i,j) for i in 1:length(new_k_grid), j in 1:length(z_grid)]
 
 # Plotting Euler Equation Errors: 
-plot(new_k_grid, EEEs)
+plot(new_k_grid, EEEs,
+    xlab = "k",
+    ylab = "Euler Equation Error (EEE)", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
 
-# EEE máximo para cada choque: 
-max_EEEs = [maximum(EEEs[:, s]) for s in eachindex(z_grid)]
+# Some statistics on the EEEs: 
+avg_EEE = mean(EEEs)
+median_EEE = median(EEEs)
+max_EEE = maximum(EEEs)
+min_EEE = minimum(EEEs)
