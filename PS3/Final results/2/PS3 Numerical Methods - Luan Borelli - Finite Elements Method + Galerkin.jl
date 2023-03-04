@@ -131,7 +131,7 @@ end
 
 # Defining the system: 
 
-function res_st(γ) 
+function system(γ) 
     size_γ = size(γ)[1]
     err = zeros(size_γ, length(z_grid))
 
@@ -139,13 +139,13 @@ function res_st(γ)
         for i in 1:size_γ
 
             if i > 1
-                restmp_det_1(k) = R(k, z, γ).*((k-k_grid[i-1])/(k_grid[i] - k_grid[i-1]))
-                err[i, z] = err[i, z] + integral_gl(restmp_det_1, k_grid[i-1], k_grid[i], length(k_grid))
+                term_1(k) = R(k, z, γ).*((k-k_grid[i-1])/(k_grid[i] - k_grid[i-1]))
+                err[i, z] = err[i, z] + integral_gl(term_1, k_grid[i-1], k_grid[i], length(k_grid))
             end 
             
             if i < size_γ
-                restmp_det_2(k) = R(k, z, γ).*((k_grid[i+1]-k)/(k_grid[i+1] - k_grid[i]))
-                err[i, z] = err[i, z] + integral_gl(restmp_det_2, k_grid[i], k_grid[i+1], length(k_grid))
+                term_2(k) = R(k, z, γ).*((k_grid[i+1]-k)/(k_grid[i+1] - k_grid[i]))
+                err[i, z] = err[i, z] + integral_gl(term_2, k_grid[i], k_grid[i+1], length(k_grid))
             end 
 
         end
@@ -164,7 +164,7 @@ policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate t
 init_guess = repeat([i for i in range(2,4, length(k_grid))]', length(z_grid))' # Convergence requires a minimally intelligent initial guess. This is why I consider this specific initial guess.
 
 @time begin 
-    params_c = nlsolve(res_st, init_guess).zero # Solving the system. 
+    params_c = nlsolve(system, init_guess).zero # Solving the system. 
 end 
 
 # Recovering the consumption policy function: 
