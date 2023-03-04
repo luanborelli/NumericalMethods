@@ -1,37 +1,18 @@
-using Plots
-using NLsolve
-using Distributions, Random
-using FastGaussQuadrature
-using Base.Threads
+#########################################
+## Problem Set 3 - Numerical Methods   ##
+## Chebyshev Collocation               ##
+## Student: Luan Borelli               ##
+#########################################
 
-##################################
-## RBC by Chebyshev Collocation ##
-##################################
+###############################
+## Importing useful packages ##
+###############################
 
-# Defining model parameters: 
+using Plots, NLsolve, Distributions, Random, Base.Threads
 
-β = 0.987
-μ = 2
-α = 1/3 
-δ = 0.012 
-ρ = 0.95
-σ = 0.007
-
-k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1))
-
-a = 0.75*k_ss
-b = 1.25*k_ss
-k_grid = range(a, b, length = 500);
-normalized_k(k) = 2*((k - a)/(b - a)) - 1
-unnormalized_k(k) = ((b - a)/2)*(k + 1) + a
-
-# Defining Chebyshev polynomials and Chebyshev roots functions:
-
-chebyshev_polynomial(x, degree) = cos(degree * acos(x))
-chebyshev_root(i, degree) = -cos((2*i-1)/(2*degree)*pi);
-chebyshev_roots(degree) = [chebyshev_root(i, degree) for i in 1:degree]
-
-# Discretizing: 
+#################################
+## Defining Tauchen's function ##
+#################################
 
 function tauchen(μ,σsq,ρ,N,m)
   
@@ -64,14 +45,46 @@ function tauchen(μ,σsq,ρ,N,m)
   end
 
 
-tauch = tauchen(0,σ^2,ρ,7,3)
-z_grid = exp.(tauch[1]) 
-Π = tauch[2]
+###############################
+## Defining model parameters ##
+###############################
+
+β = 0.987
+μ = 2
+α = 1/3 
+δ = 0.012 
+ρ = 0.95
+σ = 0.007
+
+k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1)) # Steady state value for capital. 
+
+a = 0.75*k_ss # Lower bound for the capital domain.
+b = 1.25*k_ss # Upper bound for the capital domain. 
+k_grid = range(a, b, length = 500); # Generatng the capital domain. 
+
+tauch = tauchen(0,σ^2,ρ,7,3); # Discretizing the state space for the parameterization of the problem. 
+z_grid = exp.(tauch[1]); # Grid.
+Π = tauch[2]; # Transition matrix.  
+
+########################################################################
+## Defining specific functions for the (Chebyshev) collocation method ##
+########################################################################
+
+# Chebyshev polynomials are defined in [-1, 1]. Thus we need to define the following two functions:
+
+normalized_k(k) = 2*((k - a)/(b - a)) - 1 # This function translates values from k_grid into the [-1,1] domain. 
+unnormalized_k(k) = ((b - a)/2)*(k + 1) + a # This function translates values from [-1,1] into the k_grid domain. 
+
+# Defining Chebyshev polynomials and Chebyshev roots functions:
+
+chebyshev_polynomial(x, degree) = cos(degree * acos(x)); # This function evaluates a Chebyshev polynomial of degree 'degree' at the point 'x'. 
+chebyshev_root(i, degree) = -cos((2*i-1)/(2*degree)*pi); # This function obtains the 'i'-th root of the degree 'degree' Chebyshev polynomial. 
+chebyshev_roots(degree) = [chebyshev_root(i, degree) for i in 1:degree]; # This function returns all the 'degree' degree Chebyshev polynomial.
 
 # Here our basis functions are the Chebyshev polynomials. 
 # Defining the "approximate policy function", c_hat: 
 
-function c_hat(k, z_ind, γ)
+function c_hat(k, z_ind, γ) # "Approximate" policy function.
     fval = 0; 
     size_γ = size(γ)[1]
     for i in 0:(size_γ - 1) # Note que length(γ) = Ordem do polinomio + 1. Ou seja, length(γ) - 1 é a ordem do polinômio.
@@ -80,7 +93,7 @@ function c_hat(k, z_ind, γ)
     return fval 
 end
 
-function R(k, z_ind, γ) 
+function R(k, z_ind, γ) # Residual function. 
     kp = z_grid[z_ind] * k^α + (1-δ)*k - c_hat(k, z_ind, γ)
     cps = [c_hat(kp, z, γ) for z in 1:length(z_grid)] # c(k', z')'s
     error = c_hat(k, z_ind, γ).^(-μ) - β * Π[z_ind,:]' * (cps .^(-μ) .* ( α*z_grid*kp.^(α - 1) .+ 1 .- δ))
@@ -88,7 +101,7 @@ function R(k, z_ind, γ)
     return error
 end
 
-function system(γ) 
+function system(γ) # This function constructs the system to be solved. 
     size_γ = size(γ)[1]
     err = zeros(size_γ, length(z_grid))
 
@@ -104,104 +117,154 @@ function system(γ)
     return err
 end
 
-#= 
+###########################################################
+## Solving the RBC model by Chebyshev Collocation Method ##
+###########################################################
 
-#init_guess = [i for i in range(0,4,5)]
-init_guess = ones(2, length(z_grid))
-params_c = zeros(length(init_guess[:,1]), length(z_grid))
-policy_c = zeros(length(k_grid), length(z_grid))
+deg = 5 # Maximum degree for the basis functions (Chebyshev polynomials). I set 5.
 
+params_c = zeros(deg, length(z_grid)) # A vector that will allocate the final vector for the basis functions' coefficients.  
+policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate the final consumption policy function.  
 
-# Resolvendo sem aprimoramento de chute: 
-@time begin 
-    @threads for i in 1:length(z_grid)  
-        system_at_z = x -> system(x, i)
-        params_c[:,i] = nlsolve(system_at_z, init_guess[:,i]).zero
-        policy_c[:,i] = c_hat.(k_grid, repeat([params_c[:,i]], length(k_grid)))
-    end
-end 
+### Solving the model.
+# Note that I use an initial guess "improvement trick". 
+# It turns out that the collocation method is quite sensitive with respect to the initial guess considered and, depending on the guess, 
+# the model may not converge properly to the appropriate solution. The problem is that the greater the chosen maximum degree 'deg',
+# the greater will be the vector of coefficients of basis functions and, therefore, the greater will be the dimension of the initial 
+# guess that we must elaborate. Therefore, the more difficult it will be to "predict" a reasonable guess. 
+# To avoid this, the idea is to start with a low maximum degree 'deg' (say, one), solve the system using an arbitrary guess, 
+# use the solution (concatenating an additional zero at the end of the vector to match dimensions) as an initial guess to re-solve the model, 
+# now to ' deg'+1 (say, two) and repeat the process until you reach the final desired degree (say, five). With this successive improvement of guesses, 
+# proper convergence of the solution becomes more likely. 
 
-plot(k_grid, policy_c)
-=# 
+# Note that, to fully characterize the economy, in practice we solve "7 models", one for each possible value of z (that is, one for each state of nature).
 
-deg = 5
-
-params_c = zeros(deg, length(z_grid))
-policy_c = zeros(length(k_grid), length(z_grid))
-
-### Resolvendo com aprimoramento de chute:
 @time begin
     for i in 1:length(z_grid)
         guess = ones(2, length(z_grid)) 
-        for n in 1:deg ## 1 ou 2? Resultados iguais o.O
+        for n in 1:deg 
             results = nlsolve(system, guess).zero
             if n < deg
                 guess = vcat(results, zeros(length(z_grid))')
             else 
                 guess = results
             end 
-            print("\n", guess, "\n")
+            # print("\n", guess, "\n")
         end 
         params_c = guess
     end
 end 
 
+# Recovering the consumption policy function: 
 policy_c = [c_hat(k, z, params_c) for k in k_grid, z in 1:length(z_grid)]
 
-plot(k_grid, policy_c)
-
-# Recovering capital policy function: 
+# Recovering the capital policy function: 
 policy_k = [z_grid[z]*k_grid[k]^α + (1-δ)*k_grid[k] - policy_c[k, z] for k in 1:length(k_grid), z in 1:length(z_grid)]
-plot(k_grid, policy_k)
-#plot(k_grid, policy_k, xlims = (47, 48), ylims =(47, 48)) # Zooming in for a better visualization. 
 
+# Recovering the value function:
 
-# Recovering value function:  # ESTÁ ESTRANHO... (!!!!!!!!!!!!)
+# For this, we need to define some additional and values and functions: 
 
-tol = 10^(-5); # Tolerância para a distância entre elementos da função valor.
-iter = 0; # Utilizarei essa variável para contar o número de iterações. 
-maxiter = 1000; # Limite de iterações. Utilizaremos isso para evitar um possível loop infinito.
-V_prev = ones(length(k_grid), length(z_grid)); # Vetor temporário para a iteração da função valor. 
-# V = zeros(length(k_grid), length(z_grid)) # Initial guess 
-c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # Matriz de consumos. Esta matriz computa todos os consumos possíveis para todas as combinações possíveis de k e z. 
-V = ((c.^(1-μ).-1)./(1-μ))./(1-β)
+tol = 10^(-5); # Tolerance for the distance between elements of the value function.
+# We will use this tolerance to define when to stop the iterative process.
+# tol defines, therefore, the distance from which we consider that the elements of the value function
+# are "close enough". Remember that the sequence of V's is a Cauchy sequence.
 
-# "Estimando" as posições de k'(k, z) no grid de k: 
+iter = 0;  # We will use this variable to count the number of iterations.
+maxiter = 1000; # Maximum number of iterations. We will use this to avoid the possibility of an infinite loop.
+V_prev = ones(length(k_grid), length(z_grid)); # Temporary vector for the value function iteration.
+
+# Moll's initial guess for the value function: 
+c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # A kind of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z.  
+V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
+
+# "Estimating" the positions of k'(k, z) (capital  policy function) on the exogenous grid: 
 pol_index = [findfirst(isequal(minimum(abs.(k_grid .- policy_k[i,j]))), abs.(k_grid .- policy_k[i,j])) for i in 1:length(k_grid), j in 1:length(z_grid)]
+
+# Obtaining the capital policy function on the exogenous grid: 
+policy_exo = [k_grid[pol_index[i, j]] for i in eachindex(k_grid), j in eachindex(z_grid)]
 
 # Defining preferences: 
 function u(c) 
     if c > 0
         u = (c^(1-μ) - 1)/(1-μ); # Utility function
     else 
-        u = -Inf # Necessário para evitar consumo negativo. Se c < 0, utilidade = -infinito.
+        u = -Inf # This is necessary to avoid negative consumption. If c < 0, utility = -∞.
     end
     return u
 end
 
-while maximum(abs.(V_prev - V)) > tol && iter < maxiter # Utilizamos a sup norm. 
+# Obtaining the value function: 
+
+while maximum(abs.(V_prev - V)) > tol && iter < maxiter
     V_prev = copy(V)
     for j in 1:length(z_grid)
         for i in 1:length(k_grid)
-            V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy_k[i,j]) + β * Π[j,:]' * V_prev[pol_index[i,j],:] 
+            V[i, j] = u(z_grid[j]*k_grid[i]^α + (1-δ)*k_grid[i] - policy_exo[i,j]) + β * Π[j,:]' * V_prev[pol_index[i,j],:] 
             # print("\n", V[i, j], "\n")
         end
     end
 
-    iter += 1; # Soma um ao contador de iterações
-    print("\n", "Iter: ", iter)
-    print("\n", "Distance: ", maximum(abs.(V_prev - V)))
+    # iter += 1;
+    # print("\n", "Iter: ", iter)
+    # print("\n", "Distance: ", maximum(abs.(V_prev - V)))
 
 end
 
-V
+#######################
+## Results and plots ##
+#######################
 
-plot(k_grid, V)
+# Plotting the value function: 
 
-# Euler Errors #
+plot(k_grid, V, 
+    xlab = "k",
+    ylab = "V", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
 
-# No grid de 500: (no grid de 11 fica horrível)
-cp = [c_hat(policy_k[k,z1], z2, params_c) for k in 1:length(k_grid), z1 in 1:length(z_grid), z2 in 1:length(z_grid)] # Cria um array de C primes, "uma matriz de C primes para cada estado". 
+plot(repeat(k_grid,1,7), repeat(z_grid',length(k_grid)), V,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "V",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot
+
+# Plotting the capital policy function:
+
+plot(k_grid, policy_k,
+    xlab = "k",
+    ylab = "k'", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
+
+plot(repeat(k_grid,1,7), repeat(z_grid',length(k_grid)), policy_k,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "k'",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot.
+ 
+# Plotting the consumption policy function: 
+
+plot(k_grid, policy_c,
+    xlab = "k",
+    ylab = "c", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
+
+plot(repeat(k_grid,1,7), repeat(z_grid',length(k_grid)), policy_c,
+    xlab = "k", 
+    ylab = "z", 
+    zlab = "c",
+    seriestype=:surface, 
+    camera=(20,40)) # 3D plot. 
+
+###########################
+## Euler Equation Errors ##
+###########################
+
+cp = [c_hat(policy_k[k,z1], z2, params_c) for k in 1:length(k_grid), z1 in 1:length(z_grid), z2 in 1:length(z_grid)] # Generate an array of C primes; an array of C primes for each state.
 
 # This function calculates the Euler Error for a given k (index) and a given z (index): 
 EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (cp[k_ind, z_ind, :].^(-μ) .* (α*z_grid*policy_k[k_ind,z_ind]^(α-1) .+ 1 .- δ))))^(-1/μ))/(policy_c[k_ind, z_ind])))
@@ -209,21 +272,15 @@ EEE(k_ind, z_ind) = log10(abs(1-((β*(Π[z_ind,:]' * (cp[k_ind, z_ind, :].^(-μ)
 # Generating a matrix of EEEs for every possible combination of k's and z's:
 EEEs = [EEE(i,j) for i in 1:length(k_grid), j in 1:length(z_grid)]
 
-# Plotting Euler Equation Errors: 
-plot(k_grid, EEEs)
+# Plotting Euler Equation Errors:
+plot(k_grid, EEEs,
+    xlab = "k",
+    ylab = "Euler Equation Error (EEE)", 
+    label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7"], 
+    legend = :outertopright) # 2D plot.
 
-# EEE máximo para cada choque: 
-max_EEEs = [maximum(EEEs[:, s]) for s in eachindex(z_grid)]
-
-
-
-
-# Tem algo errado... Pra ordens baixas (até 5 +-) roda, 
-# mas policy functions não fazem sentido! SOLUÇÃO: aprimoramento de chutes. 
-
-
-# Verificar resultados com diferentes especificações da função de residuo: 
-## Tem a que eu usei, tem a "mais simples", sem tirar expoente nem nada... #
-## Tem a que divide... OBS.: Testei com galerkin trocar a que usei por mais simplse e aparentemente resultados não mudaram. 
-
-# Testar código do Greco sem aprimoramento para ver a robustez dos resultados. 
+# Some statistics on the EEEs: 
+avg_EEE = mean(EEEs)
+median_EEE = median(EEEs)
+max_EEE = maximum(EEEs)
+min_EEE = minimum(EEEs)

@@ -89,7 +89,7 @@ values = zeros(length(k_grid), length(z_grid)); # Vector that will store the Bel
 
 # V = zeros(length(k_grid), length(z_grid)); # Initial guess for the value function. 
 # Usually zero. But there are better guesses. For example, Moll's initial guess: 
-c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # A king of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z. 
+c = [z_grid[i]*(k_grid[j]^α).-k_grid[j].+(1-δ)*k_grid[j] for j in 1:length(k_grid), i in 1:length(z_grid)] # A kind of "consumption matrix", but setting k' = k. This matrix computes all possible consumptions for all possible combinations of k and z. 
 V = ((c.^(1-μ).-1)./(1-μ))./(1-β) # Initial guess, constructed from c.
 
 ###########################################################################
