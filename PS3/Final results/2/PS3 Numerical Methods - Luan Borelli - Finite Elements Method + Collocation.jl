@@ -10,10 +10,6 @@
 
 using Plots, NLsolve, Distributions, Random, Base.Threads
 
-##################################
-## RBC by Chebyshev Collocation ##
-##################################
-
 #################################
 ## Defining Tauchen's function ##
 #################################
