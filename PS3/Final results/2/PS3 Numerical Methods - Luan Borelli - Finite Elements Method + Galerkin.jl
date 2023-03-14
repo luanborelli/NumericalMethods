@@ -55,7 +55,7 @@ function tauchen(μ,σsq,ρ,N,m)
 ρ = 0.95
 σ = 0.007
 k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1))
-k_grid = range(0.75*k_ss, 1.25*k_ss, length = 10); # For finite elements methods we don't need a very "fine" grid to represent the capital domain. 
+k_grid = range(0.75*k_ss, 1.25*k_ss, length = 15); # For finite elements methods we don't need a very "fine" grid to represent the capital domain. 
 # A few points are enough for a good approximation. For this reason, I generate a grid of size 15 here.
 
 tauch = tauchen(0,σ^2,ρ,7,3)
@@ -74,7 +74,7 @@ function integral_gl(f, a, b, n)
     return result
 end
 
-#= But a possible alternative would be to use the Gauss-Chebyshev quadrature:
+#= But another possible alternative would be to use the Gauss-Chebyshev quadrature:
 
 function integral_gc(f, a, b, n)
    nodes, weights = gausschebyshev(n); 

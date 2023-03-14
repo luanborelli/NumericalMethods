@@ -59,7 +59,7 @@ k_ss = ((1-β*(1-δ))/(α*β))^(1/(α-1))
 
 a = 0.75*k_ss
 b = 1.25*k_ss
-k_grid = range(a, b, length = 30); # For finite element methods we don't need a very "fine" grid to represent the capital domain. 
+k_grid = range(a, b, length = 15); # For finite element methods we don't need a very "fine" grid to represent the capital domain. 
 # A few points are enough for a good approximation. For this reason, I generate a grid of size 15 here.
 
 tauch = tauchen(0,σ^2,ρ,7,3)
@@ -138,7 +138,9 @@ params_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate t
 policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate the final consumption policy function.  
 guess = ones(length(k_grid),length(z_grid)) .* range(1, 5, length(k_grid)) # Convergence requires a minimally intelligent initial guess. This is why I consider this specific initial guess.
 
-params_c = nlsolve(system, guess).zero # Solving the system.
+@time begin 
+    params_c = nlsolve(system, guess).zero # Solving the system.
+end 
 
 # It is possible to show that the parameters obtained in the result above are the consumption policy function itself.
 # Nevertheless, just in case, let's recover the consumption policy function as we did before in the other methods: 
@@ -287,7 +289,7 @@ plot(new_k_grid, EEEs,
     legend = :outertopright) # 2D plot.
 
 # Some statistics on the EEEs: 
-avg_EEE = mean(EEEs)
+avg_EEE = mean(EEEs[1:499,:])
 median_EEE = median(EEEs)
 max_EEE = maximum(EEEs)
-min_EEE = minimum(EEEs)
+min_EEE = minimum(EEEs[1:499,:])
