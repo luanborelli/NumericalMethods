@@ -144,7 +144,6 @@ policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate t
 # Note that, to fully characterize the economy, in practice we solve "7 models", one for each possible value of z (that is, one for each state of nature).
 
 @time begin # Solving the system.
-    for i in 1:length(z_grid)
         guess = ones(2, length(z_grid)) 
         for n in 1:deg 
             results = nlsolve(system, guess).zero
@@ -156,7 +155,6 @@ policy_c = zeros(length(k_grid), length(z_grid)) # A vector that will allocate t
             # print("\n", guess, "\n")
         end 
         params_c = guess
-    end
 end 
 
 # Recovering the consumption policy function: 
