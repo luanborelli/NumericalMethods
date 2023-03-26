@@ -227,11 +227,11 @@ a_max = +ϕ;
 a_grid = range(a_min + 10e-9, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
 
 @time begin 
-    agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(r);
+    agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(0.03);
 end 
 
 # Value function plot
-V_2d_b = plot(a_grid[2:end,:], V[2:end,:], 
+V_2d_b = plot(a_grid, V, 
         xlab = "a", 
         ylab = "V", 
         label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7" "State 8" "State 9"], 
@@ -239,19 +239,19 @@ V_2d_b = plot(a_grid[2:end,:], V[2:end,:],
 
 # savefig(V_2d_b, "V_2d_b.pdf")
 
-V_3d_b = plot(repeat(a_grid[2:end],1,length(z_grid)), repeat(z_grid',length(a_grid)-1), V[2:end, :],
+V_3d_b = plot(repeat(a_grid,1,length(z_grid)), repeat(z_grid',length(a_grid)), V,
     xlab = "a", 
     ylab = "z", 
     zlab = "V",
     seriestype=:surface, 
-    camera=(35,35)) # 3D plot.
+    camera=(40,35)) # 3D plot.
 
 # savefig(V_3d_b, "V_3d_b.pdf")
 
 # Asset policy function plot 
 a_2d_b = plot(a_grid, policy, 
     xlab = "a", 
-    ylab = "V", 
+    ylab = "a'", 
     label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7" "State 8" "State 9"], 
     legend = :outertopright)
 
@@ -315,7 +315,7 @@ EEE(a_ind, z_ind) = log10(abs(1-((1+r)*β*(Π[z_ind,:]' * (policy_c[policy_index
 EEEs = [EEE(i,j) for i in 1:length(a_grid), j in 1:length(z_grid)]
 
 # Plotting Euler Equation Errors: 
-plot(a_grid, EEEs,
+eees_b = plot(a_grid, EEEs,
     xlab = "a",
     ylab = "Euler Equation Error (EEE)", 
     label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7" "State 8" "State 9"], 
@@ -446,7 +446,7 @@ EEE(a_ind, z_ind) = log10(abs(1-((1+r)*β*(Π[z_ind,:]' * (policy_c[policy_index
 EEEs = [EEE(i,j) for i in 1:length(a_grid), j in 1:length(z_grid)]
 
 # Plotting Euler Equation Errors: 
-plot(a_grid, EEEs,
+eees_c = plot(a_grid, EEEs,
     xlab = "a",
     ylab = "Euler Equation Error (EEE)", 
     label = ["State 1" "State 2" "State 3" "State 4" "State 5" "State 6" "State 7" "State 8" "State 9"], 
@@ -631,11 +631,11 @@ min_EEE = minimum(EEEs)
 grid_r = range(0, 1/β - 1 - 10^-9, 500)
 
 @time begin 
-    Ears_c = solve_individuals_problem.(grid_r)
+    Ears_d = solve_individuals_problem.(grid_r)
 end 
 
-Ear_c = [Ears_c[i][1] for i in eachindex(grid_r)]
-Ear_plt_c = plot(Ear_c, grid_r, ylims=(0.035, 0.042))
+Ear_d = [Ears_d[i][1] for i in eachindex(grid_r)]
+Ear_plt_d = plot(Ear_d, grid_r, ylims=(0.035, 0.042))
 
 ########################################################################################################################################## 
 ##########################################################################################################################################
