@@ -8,7 +8,7 @@
 ## Importing useful packages ##
 ###############################
 
-using Plots, Distributions, Random, Base.Threads, LinearAlgebra, Roots, SparseArrays, Latexify
+using Plots, Distributions, Random, Base.Threads, LinearAlgebra, Roots, SparseArrays, Latexify, LaTeXStrings
 
 ###################################################################
 ## Defining functions to be used throughout the rest of the code ## 
@@ -337,7 +337,15 @@ grid_r = range(0, 1/β - 1 - 10^-9, 500)
 end 
 
 Ear_b = [Ears_b[i][1] for i in eachindex(grid_r)]
-Ear_plt_b = plot(Ear_b, grid_r, ylims=(0.035, 0.042))
+Ear_plt_b = plot(Ear_b, grid_r, ylims=(0.035, 0.042), linewidth=2, color="black", xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+vline!([0], color="black", linestyle=:dash)
+vline!([-ϕ], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 8, 0.0419, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 0.5, 0.038, text("Natural debt limit", :red, :right, 10, rotation=90))
+scatter!([0], [0.04152402868135286], color = "red", label = "", markersize = 5)
+
+# savefig(Ear_plt_b, "ear_b.pdf")
 
 
 ########################################################################################################################################## 
@@ -468,7 +476,16 @@ grid_r = range(0, 1/β - 1 - 10^-9, 500)
 end 
 
 Ear_c = [Ears_c[i][1] for i in eachindex(grid_r)]
-Ear_plt_c = plot(Ear_c, grid_r, ylims=(0.035, 0.042))
+Ear_plt_c = plot(Ear_c, grid_r, ylims=(0.035, 0.042), linewidth=2, color="black", xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+vline!([0], color="black", linestyle=:dash)
+vline!([-ϕ], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 8, 0.0419, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 0.5, 0.038, text("Natural debt limit", :red, :right, 10, rotation=90))
+scatter!([0], [0.04152402868135286], color = "red", label = "", markersize = 5)
+annotate!(-0.3, 0.0413, text("\$ r^* \\approx 0.0415 \$", :red, :right, 11))
+
+# savefig(Ear_plt_c, "ear_c.pdf")
 
 ########################################################################################################################################## 
 ##########################################################################################################################################
@@ -635,7 +652,16 @@ grid_r = range(0, 1/β - 1 - 10^-9, 500)
 end 
 
 Ear_d = [Ears_d[i][1] for i in eachindex(grid_r)]
-Ear_plt_d = plot(Ear_d, grid_r, ylims=(0.035, 0.042))
+Ear_plt_d = plot(Ear_d, grid_r, ylims=(0.035, 0.042), linewidth=2, color="black", xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+vline!([0], color="black", linestyle=:dash)
+vline!([-ϕ], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 8, 0.0419, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 0.5, 0.038, text("Natural debt limit", :red, :right, 10, rotation=90))
+scatter!([0], [0.04140454634421464], color = "red", label = "", markersize = 5)
+annotate!(5.1, 0.04115, text("\$ r^* \\approx 0.0414 \$", :red, :right, 11))
+
+# savefig(Ear_plt_d, "ear_d.pdf")
 
 ########################################################################################################################################## 
 ##########################################################################################################################################
@@ -678,7 +704,7 @@ r = 1/β - 1; # Risk-free rate.
 grid_size = 500;
 a_min = -ϕ;
 a_max = +ϕ;
-a_grid = range(a_min + 10e-5, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
+a_grid = range(a_min + 10e-9, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
 
 # @time begin
 #    r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
@@ -800,7 +826,16 @@ grid_r = range(0, 1/β - 1 - 10^-9, 500)
 end 
 
 Ear_e = [Ears_e[i][1] for i in eachindex(grid_r)]
-Ear_plt_e = plot(Ear_e, grid_r, ylims=(0.035, 0.042))
+Ear_plt_e = plot(Ear_e, grid_r, ylims=(0.03, 0.042), linewidth=2, color="black", xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+vline!([0], color="black", linestyle=:dash)
+vline!([-ϕ], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 8, 0.04205, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 0.5, 0.041, text("Natural debt limit", :red, :right, 10, rotation=90))
+scatter!([0], [0.04090359512950348], color = "red", label = "", markersize = 5)
+annotate!(-0.2, 0.0413, text("\$ r^* \\approx 0.0409 \$", :red, :right, 11))
+
+# savefig(Ear_plt_e, "ear_e.pdf")
 
 ########################################################################################################################################## 
 ##########################################################################################################################################
@@ -966,4 +1001,40 @@ grid_r = range(0, 1/β - 1 - 10^-9, 500)
 end 
 
 Ear_f = [Ears_f[i][1] for i in eachindex(grid_r)]
-Ear_plt_f = plot(Ear_f, grid_r, ylims=(0.035, 0.042))
+Ear_plt_f = plot(Ear_f, grid_r, ylims=(0, 0.042), linewidth=2, color="black", xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+vline!([0], color="black", linestyle=:dash)
+vline!([-ϕ], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 3, 0.04035, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 0.5, 0.02, text("Natural debt limit", :red, :right, 10, rotation=90))
+scatter!([0], [0.04088093653876845], color = "red", label = "", markersize = 5)
+annotate!(-0.2, 0.0395, text("\$ r^* \\approx 0.0409 \$", :red, :right, 11))
+
+# savefig(Ear_plt_f, "ear_f.pdf")
+
+
+# All E[a(r)] curves together: 
+
+Ears_plt = plot(Ear_b, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_d, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_e, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_f, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 3, 0.043, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+vline!([0], color="black", linestyle=:dash)
+
+# savefig(Ears_plt, "ears_plt_full.pdf")
+
+Ears_plt_zoomed = plot(Ear_b, grid_r, linewidth=2, ylims=(0.0405, 1/β - 0.99995), xlims=(-22, 0.1), xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_d, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_e, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+plot!(Ear_f, grid_r, linewidth=2, xlabel="\$\\mathbb{E}[a(r)]\$", ylabel="\$r\$", legend = false)
+hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
+annotate!(-ϕ + 3, 0.04171, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
+vline!([0], color="black", linestyle=:dash)
+scatter!([0], [0.04158], color = "red", label = "", markersize = 5)
+scatter!([0], [0.04140437689344434], color = "red", label = "", markersize = 5)
+scatter!([0], [0.04090359512950348], color = "red", label = "", markersize = 5)
+scatter!([0], [0.04088093653876845], color = "red", label = "", markersize = 5)
+
+# savefig(Ears_plt_zoomed, "ears_plt_full_zoomed.pdf")
