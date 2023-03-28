@@ -355,17 +355,11 @@ scatter!([0], [0.04152402868135286], color = "red", label = "", markersize = 5)
 ## c ##
 ####### 
 
-# @time begin # Wide brackets.
-#     r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
-# end  
+@time begin # Wide brackets.
+    r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
+end  
 
-@time begin # Close brackets.
-  r = find_zero(solve_individuals_problem, (0.04152, 0.04153), Bisection())
-end 
-
-# 678.477271 seconds. r = 0.04152402867818983. Using brackets (0.0415, 0.0416).
-# 1618.502569 seconds. Using full brackets and directly solving for the eigenvector, converged to r = 0.04152402868135286.
-# 82 seconds. Using brackets (0.04152, 0.04153). Converged to 0.04152388631194748.
+# r = 0.04152388631895165
 
 agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(r)
 
@@ -530,18 +524,11 @@ a_min = -ϕ;
 a_max = +ϕ;
 a_grid = range(a_min + 10e-9, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
 
-# @time begin
-#     r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
-# end  
-
 @time begin
-   r = find_zero(solve_individuals_problem, (0.0414, 0.0415), Bisection())
+    r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
 end  
 
-# Converged in 1922.523141 seconds. r = 0.04140454634421464
-# Acelerei para... 1624 segundos, calculando autovetor direto.
-# 681.599172 seconds. r = 0.04140454634878677. Brackets: (0.0414, 0.0415)
-# 121 seconds. r = 0.04140437689344434. Brackets: (0.0414, 0.0415)
+# r = 0.04140437935333153
 
 agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(r)
 
@@ -706,16 +693,11 @@ a_min = -ϕ;
 a_max = +ϕ;
 a_grid = range(a_min + 10e-9, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
 
-# @time begin
-#    r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
-# end
-
 @time begin
-    r = find_zero(solve_individuals_problem, (0.0405, 0.041), Bisection())
+   r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
 end
 
-# 2161.348826 seconds. Converged to r = 0.04090359551256151.
-# 255 seconds. Brackets: (0.0405, 0.041). Converged to r = 0.04090359512950348. 
+# r = 0.040903607135897135
 
 agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(r)
 
@@ -880,17 +862,11 @@ a_min = -ϕ;
 a_max = +ϕ;
 a_grid = range(a_min + 10e-5, a_max, 500); # Note that a small positive perturbation to the lower bound is required so that agents are not able to borrow infinitely.
 
-# @time begin
-#     r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
-# end
-
 @time begin
-   r = find_zero(solve_individuals_problem, (0.04, 0.041), Bisection())
+    r = find_zero(solve_individuals_problem, (0, 1/β - 1), Bisection())
 end
 
-# 1679.900198 seconds. Converged to r = 0.04088091638701418.
-# 1104.687970 seconds. Converged to r = 0.040880916387370125. Brackets: (0.04, 0.041)
-# 131 seconds. Converged to r = 0.04088093653876845. Brackets: (0.04, 0.041)
+# r* = 0.04088093653932978
 
 agg_savings, V, policy, policy_index, π_∞, mg_π = solve_individuals_problem(r)
 
@@ -1008,7 +984,7 @@ annotate!(-ϕ + 3, 0.04035, text("\$ 1/ \\beta - 1\$", :red, :right, 11))
 hline!([1/β - 1], color="red", linestyle=:dash, linewidth=2)
 annotate!(-ϕ + 0.5, 0.02, text("Natural debt limit", :red, :right, 10, rotation=90))
 scatter!([0], [0.04088093653876845], color = "red", label = "", markersize = 5)
-annotate!(-0.2, 0.0395, text("\$ r^* \\approx 0.0409 \$", :red, :right, 11))
+annotate!(-0.2, 0.0395, text("\$ r^* \\approx 0.04088 \$", :red, :right, 11))
 
 # savefig(Ear_plt_f, "ear_f.pdf")
 
