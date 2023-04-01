@@ -8,4 +8,4 @@ Course wiki can be found [here](https://epge.fgv.br/we/MD/MetodosNumericos/2023)
 
 **PS3**. Projection methods (Chebyshev collocation, finite element methods, Galerkin).
 
-**PS4**. Incomplete markets (Hugget).
+**PS4**. Incomplete markets (Huggett model).
